@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="프론트엔드 개발자 김개발의 개인 프로필과 프로젝트를 소개합니다.">
+  <title>김개발 | Frontend Developer</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/script.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 바로가기</a>
+  <header class="site-header">
+    <nav class="nav container" aria-label="주요 메뉴">
+      <a class="logo" href="#home" aria-label="페이지 처음으로">KD<span>.</span></a>
+      <button class="theme-toggle" type="button" aria-label="다크 모드로 변경" title="테마 변경">☾</button>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-list">
+        <span class="sr-only">메뉴 열기</span><span></span><span></span><span></span>
+      </button>
+      <ul class="nav-list" id="nav-list">
+        <li><a href="about.html">소개</a></li>
+        <li><a href="skills.html">기술</a></li>
+        <li><a href="projects.html">프로젝트</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="home">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">안녕하세요, 반갑습니다 👋</p>
+          <h1>사용자의 경험을 생각하는<br><span>프론트엔드 개발자 김개발</span>입니다.</h1>
+          <p class="hero-description">깔끔한 코드와 섬세한 인터페이스로 아이디어를 가치 있는 웹 경험으로 만듭니다.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#projects">프로젝트 보기</a>
+            <a class="button secondary" href="#contact">연락하기</a>
+          </div>
+          <div class="social-links" aria-label="소셜 링크">
+            <a href="https://github.com/your-id" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+            <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer">LinkedIn <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+        <div class="profile-visual">
+          <div class="profile-ring"><img class="profile-avatar" src="assets/images/profile.jpeg" alt="웃고 있는 흰색 강아지 프로필 사진"></div>
+          <span class="status"><i></i> 새로운 기회를 찾고 있어요</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="about">
+      <div class="container two-column">
+        <div><p class="section-label">ABOUT ME</p><h2>좋은 경험은 작은 디테일에서 시작됩니다.</h2></div>
+        <div class="about-copy">
+          <p>사용자에게 편리하고 즐거운 경험을 제공하는 웹 서비스를 만드는 개발자입니다. 문제의 본질을 이해하고, 동료와 적극적으로 소통하며 더 나은 답을 찾아갑니다.</p>
+          <p>새로운 기술을 배우는 것을 즐기며 접근성, 반응형 디자인, 유지보수하기 좋은 코드에 관심이 많습니다.</p>
+          <dl class="quick-info"><div><dt>위치</dt><dd>서울, 대한민국</dd></div><div><dt>관심 분야</dt><dd>Web UI · UX · Accessibility</dd></div></dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="section tinted" id="strengths">
+      <div class="container"><p class="section-label">STRENGTHS</p><h2>저의 강점입니다.</h2>
+        <div class="card-grid strengths">
+          <article class="card"><span class="card-number">01</span><h3>사용자 중심 사고</h3><p>사용 흐름을 세심하게 살피고 누구나 편하게 사용할 수 있는 화면을 설계합니다.</p></article>
+          <article class="card"><span class="card-number">02</span><h3>꾸준한 성장</h3><p>새로운 기술을 빠르게 학습하고 기록과 회고를 통해 배움을 다음 작업에 적용합니다.</p></article>
+          <article class="card"><span class="card-number">03</span><h3>명확한 소통</h3><p>진행 상황과 문제를 투명하게 공유하고 공동의 목표를 중심으로 협업합니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="skills">
+      <div class="container"><p class="section-label">SKILLS</p><h2>이런 기술을 사용합니다.</h2>
+        <div class="skill-groups">
+          <article><h3>Frontend</h3><ul class="tag-list"><li>HTML5</li><li>CSS3</li><li>JavaScript</li><li>Responsive Web</li></ul></article>
+          <article><h3>Tools & Collaboration</h3><ul class="tag-list"><li>Git</li><li>GitHub</li><li>Figma</li><li>Notion</li></ul></article>
+          <article><h3>Currently Learning</h3><ul class="tag-list"><li>React</li><li>TypeScript</li><li>Web Accessibility</li></ul></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section tinted" id="projects">
+      <div class="container"><p class="section-label">PROJECTS</p><div class="section-heading"><h2>완성한 프로젝트입니다.</h2><a href="https://github.com/your-id" target="_blank" rel="noreferrer">GitHub 전체 보기 ↗</a></div>
+        <div class="project-grid">
+          <article class="project-card"><div class="project-preview preview-one"><span>PROFILE</span></div><div class="project-body"><p class="project-type">PERSONAL PROJECT</p><h3>반응형 프로필 웹사이트</h3><p>소개, 기술, 프로젝트를 한눈에 볼 수 있도록 구성한 접근성 중심의 개인 웹사이트입니다.</p><ul class="tag-list small"><li>HTML</li><li>CSS</li><li>JavaScript</li></ul><div class="project-links"><a href="#home">Demo ↗</a><a href="https://github.com/your-id" target="_blank" rel="noreferrer">GitHub ↗</a></div></div></article>
+          <article class="project-card"><div class="project-preview preview-two"><span>TASK FLOW</span></div><div class="project-body"><p class="project-type">TEAM PROJECT</p><h3>스마트 할 일 관리 서비스</h3><p>업무를 분류하고 진행 상황을 직관적으로 확인할 수 있는 생산성 웹 애플리케이션입니다.</p><ul class="tag-list small"><li>JavaScript</li><li>CSS Grid</li><li>LocalStorage</li></ul><div class="project-links"><a href="#projects">Demo ↗</a><a href="https://github.com/your-id" target="_blank" rel="noreferrer">GitHub ↗</a></div></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section contact" id="contact">
+      <div class="container contact-grid">
+        <div><p class="section-label">CONTACT</p><h2>함께 좋은 경험을<br>만들어 볼까요?</h2><p>프로젝트 제안이나 궁금한 점이 있다면 편하게 연락해 주세요.</p><a class="email-link" href="mailto:hello@example.com">hello@example.com</a><p class="contact-note">전화: 010-0000-0000</p></div>
+        <form class="contact-form" id="contact-form" novalidate>
+          <div class="field"><label for="name">이름</label><input id="name" name="name" type="text" autocomplete="name" placeholder="이름을 입력해 주세요" required><small class="error"></small></div>
+          <div class="field"><label for="email">이메일</label><input id="email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required><small class="error"></small></div>
+          <div class="field"><label for="message">메시지</label><textarea id="message" name="message" rows="5" placeholder="메시지를 입력해 주세요" required></textarea><small class="error"></small></div>
+          <button class="button primary" type="submit">메시지 보내기</button><p class="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="container footer-inner"><p>© <span id="year"></span> 김개발. All rights reserved.</p><a href="#home">위로 이동 ↑</a></div></footer>
+</body>
+</html>
