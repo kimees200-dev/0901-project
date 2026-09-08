@@ -10,6 +10,11 @@ const CONFIG = Object.freeze({
   MIN_PASSWORD_LENGTH: 8,
 });
 
+const SHEET_HEADERS = Object.freeze({
+  users: ['id', 'name', 'email', 'passwordHash', 'salt', 'role', 'createdAt', 'updatedAt'],
+  sessions: ['token', 'userId', 'expiresAt', 'createdAt'],
+});
+
 function doGet(e) {
   try {
     const action = String(e.parameter.action || 'health');
@@ -57,12 +62,8 @@ function doPost(e) {
 /** 최초 1회 실행해 users, sessions 시트와 헤더를 생성합니다. */
 function setupSheets() {
   const spreadsheet = getSpreadsheet_();
-  ensureSheet_(spreadsheet, CONFIG.USERS_SHEET, [
-    'id', 'name', 'email', 'passwordHash', 'salt', 'role', 'createdAt', 'updatedAt',
-  ]);
-  ensureSheet_(spreadsheet, CONFIG.SESSIONS_SHEET, [
-    'token', 'userId', 'expiresAt', 'createdAt',
-  ]);
+  ensureSheet_(spreadsheet, CONFIG.USERS_SHEET, SHEET_HEADERS.users);
+  ensureSheet_(spreadsheet, CONFIG.SESSIONS_SHEET, SHEET_HEADERS.sessions);
 
   PropertiesService.getScriptProperties().setProperty('SETUP_COMPLETE', 'true');
   return '시트 초기화가 완료되었습니다.';
@@ -74,12 +75,12 @@ function signup_(body) {
   const password = String(body.password || '');
 
   validateSignup_(name, email, password);
+  const usersSheet = getRequiredSheet_(CONFIG.USERS_SHEET);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
   try {
-    const usersSheet = getRequiredSheet_(CONFIG.USERS_SHEET);
     const users = getRowsAsObjects_(usersSheet);
 
     if (users.some(user => normalizeEmail_(user.email) === email)) {
@@ -201,8 +202,26 @@ function getSpreadsheet_() {
 }
 
 function getRequiredSheet_(name) {
-  const sheet = getSpreadsheet_().getSheetByName(name);
-  if (!sheet) throw new Error(`'${name}' 시트가 없습니다. setupSheets 함수를 먼저 실행해 주세요.`);
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(name);
+
+  if (!sheet) {
+    const headers = SHEET_HEADERS[name];
+    if (!headers) throw new Error(`지원하지 않는 시트입니다: ${name}`);
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      Object.keys(SHEET_HEADERS).forEach(sheetName => {
+        ensureSheet_(spreadsheet, sheetName, SHEET_HEADERS[sheetName]);
+      });
+      sheet = spreadsheet.getSheetByName(name);
+      PropertiesService.getScriptProperties().setProperty('SETUP_COMPLETE', 'true');
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   return sheet;
 }
 
@@ -212,6 +231,7 @@ function ensureSheet_(spreadsheet, name, headers) {
   if (sheet.getLastRow() === 0) sheet.appendRow(headers);
   sheet.setFrozenRows(1);
   sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  return sheet;
 }
 
 function getRowsAsObjects_(sheet) {
