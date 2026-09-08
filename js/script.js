@@ -39,8 +39,31 @@ const validators = {
   email: value => /^\S+@\S+\.\S+$/.test(value),
   password: value => value.length >= 8
 };
+
+const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbzvTjX9UOSTtQfsvoNeGQn7iBZWN5-MahdPJMzUbo5MppBEPDr4CkusSZat0BK7XIO1/exec';
+
+async function authRequest(payload) {
+  const response = await fetch(AUTH_API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text();
+
+  if (!response.ok || text.trim().startsWith('<!DOCTYPE') || text.includes('액세스 권한 필요')) {
+    throw new Error('Apps Script 접근이 거부되었습니다. 웹 앱 액세스 권한을 모든 사용자로 변경해 주세요.');
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error('서버가 올바른 JSON을 반환하지 않았습니다. Apps Script 배포 버전을 확인해 주세요.');
+  }
+}
+
 document.querySelectorAll('.app-form').forEach(form => {
-  form.addEventListener('submit', event => {
+  form.addEventListener('submit', async event => {
     event.preventDefault(); let valid = true;
     form.querySelectorAll('[required]').forEach(field => {
       let bad = field.type === 'checkbox' ? !field.checked : !field.value.trim();
@@ -54,7 +77,40 @@ document.querySelectorAll('.app-form').forEach(form => {
     const status = form.querySelector('.form-status');
     if (!valid) { status.textContent = '입력 내용을 확인해 주세요.'; form.querySelector('.invalid')?.focus(); return; }
     const type = form.dataset.form;
-    status.textContent = type === 'signup' ? '회원가입 정보가 확인되었습니다. 백엔드 연결 후 실제 가입됩니다.' : type === 'login' ? '로그인 정보가 확인되었습니다. 백엔드 연결 후 실제 로그인됩니다.' : '게시글이 확인되었습니다. 백엔드 연결 후 실제 게시됩니다.';
+    if (type !== 'signup' && type !== 'login') {
+      status.textContent = '게시글이 확인되었습니다. 백엔드 연결 후 실제 게시됩니다.';
+      return;
+    }
+
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    button.textContent = type === 'signup' ? '가입 중…' : '로그인 중…';
+
+    try {
+      const payload = {
+        action: type,
+        email: form.elements.email.value.trim(),
+        password: form.elements.password.value,
+      };
+      if (type === 'signup') payload.name = form.elements.name.value.trim();
+
+      const result = await authRequest(payload);
+      if (!result.success) throw new Error(result.message || '요청을 처리하지 못했습니다.');
+
+      if (type === 'signup') {
+        status.textContent = result.message;
+        setTimeout(() => { location.href = 'login.html'; }, 900);
+      } else {
+        localStorage.setItem('blog-session', JSON.stringify({ token: result.token, expiresAt: result.expiresAt, user: result.user }));
+        status.textContent = result.message;
+        setTimeout(() => { location.href = 'profile.html'; }, 500);
+      }
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = type === 'signup' ? '계정 만들기' : '로그인';
+    }
   });
   form.addEventListener('input', event => { event.target.classList.remove('invalid'); const error = event.target.closest('.field')?.querySelector('.error'); if (error) error.textContent = ''; });
 });
