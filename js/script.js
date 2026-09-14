@@ -60,7 +60,7 @@ const validators = {
   password: value => value.length >= 8
 };
 
-const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbzL7WU4VcaNtNqLryqFfaePU0hvIM1vGscRgi1ItZWuONfaBB4fDnrMyuGlg9f-2je_/exec';
+const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbzCpNq6ObHi0AWSt3dS2VfFKI8JYvqjNQrjZWAjO9-vzRl8XLuIOIiVTpcgh4AUsvsg/exec';
 
 async function authRequest(payload) {
   const response = await fetch(AUTH_API_URL, {
