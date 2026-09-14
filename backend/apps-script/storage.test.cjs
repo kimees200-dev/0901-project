@@ -63,3 +63,16 @@ test('invalid post content does not create a sheet', () => {
   assert.throws(() => context.createPost_({ category: '개발' }), /제목/);
   assert.equal(sheets.size, 0);
 });
+
+test('post validation returns fields in sheet column order', () => {
+  const { context } = backend();
+  const values = context.postValues_({ category: '개발', title: '제목', summary: '요약', tags: '태그', content: '본문' });
+  assert.deepEqual(Array.from(values), ['개발', '제목', '요약', '태그', '본문']);
+});
+
+test('only the owner row is selected for update and delete', () => {
+  const { context } = backend();
+  const rows = [['id', 'userId'], ['post-1', 'user-1'], ['post-2', 'user-2']];
+  assert.equal(context.findOwnedPostRow_(rows, 'post-1', 'user-1'), 1);
+  assert.equal(context.findOwnedPostRow_(rows, 'post-1', 'user-2'), -1);
+});

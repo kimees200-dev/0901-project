@@ -82,6 +82,25 @@ async function authRequest(payload) {
   }
 }
 
+async function apiGet(action, parameters = {}) {
+  const query = new URLSearchParams({ action, ...parameters });
+  const response = await fetch(`${AUTH_API_URL}?${query}`, { redirect: 'follow' });
+  const text = await response.text();
+  if (!response.ok || text.trim().startsWith('<!DOCTYPE')) throw new Error('게시글 서버에 연결할 수 없습니다.');
+  try { return JSON.parse(text); } catch (error) { throw new Error('서버 응답 형식이 올바르지 않습니다.'); }
+}
+
+function escapeHtml(value = '') {
+  const element = document.createElement('div');
+  element.textContent = String(value);
+  return element.innerHTML;
+}
+
+function formatPostDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' }).format(date);
+}
+
 document.querySelector('.nav-logout')?.addEventListener('click', async event => {
   const button = event.currentTarget;
   button.disabled = true;
@@ -163,8 +182,98 @@ function filterPosts() {
 filterButtons.forEach(button => button.addEventListener('click', () => { activeFilter = button.dataset.filter; filterButtons.forEach(item => item.classList.toggle('active', item === button)); filterPosts(); }));
 search?.addEventListener('input', filterPosts);
 
+async function loadPublicPosts() {
+  const list = document.querySelector('#post-list');
+  if (!list) return;
+  try {
+    const result = await apiGet('posts');
+    if (!result.success) throw new Error(result.message || '게시글을 불러오지 못했습니다.');
+    list.innerHTML = result.posts.map(post => `<article data-category="${escapeHtml(post.category === '일상' ? 'life' : 'dev')}"><a href="post-detail.html?id=${encodeURIComponent(post.id)}"><div class="list-cover cover-purple">${escapeHtml(post.category)}</div><div><p class="post-meta">${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.summary)}</p></div></a></article>`).join('');
+    if (!result.posts.length) document.querySelector('.empty-state').hidden = false;
+    filterPosts();
+  } catch (error) {
+    list.innerHTML = `<p class="my-posts-status">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function loadHomePosts() {
+  if (page !== 'index.html') return;
+  const grid = document.querySelector('.post-grid');
+  if (!grid) return;
+  try {
+    const result = await apiGet('posts');
+    if (!result.success) throw new Error(result.message || '최근 게시글을 불러오지 못했습니다.');
+    const colors = ['cover-purple', 'cover-blue', 'cover-green'];
+    grid.innerHTML = result.posts.slice(0, 3).map((post, index) => `<article class="post-card"><a href="post-detail.html?id=${encodeURIComponent(post.id)}"><div class="post-cover ${colors[index % colors.length]}"><span>${escapeHtml(post.category)}</span></div><div class="post-content"><p class="post-meta">${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.summary)}</p><div class="post-author"><img src="assets/images/profile.jpeg" alt=""><span>${escapeHtml(post.author)}</span></div></div></a></article>`).join('');
+    if (!result.posts.length) grid.innerHTML = '<p class="my-posts-status">아직 작성된 게시글이 없습니다.</p>';
+  } catch (error) {
+    grid.innerHTML = `<p class="my-posts-status">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function loadPostDetail() {
+  if (page !== 'post-detail.html') return;
+  const id = new URLSearchParams(location.search).get('id');
+  if (!id) return;
+  try {
+    const result = await apiGet('post', { id });
+    if (!result.success) throw new Error(result.message);
+    const post = result.post;
+    document.querySelector('.article-header .blog-kicker').textContent = post.category;
+    document.querySelector('.article-header h1').textContent = post.title;
+    document.querySelector('.article-lead').textContent = post.summary;
+    document.querySelector('.article-author b').textContent = post.author;
+    document.querySelector('.article-author span').textContent = formatPostDate(post.createdAt);
+    const body = document.querySelector('.article-body');
+    body.innerHTML = '';
+    String(post.content).split(/\n{2,}/).forEach(paragraph => { const item = document.createElement('p'); item.textContent = paragraph; body.appendChild(item); });
+  } catch (error) {
+    document.querySelector('.article-body').textContent = error.message;
+  }
+}
+
+function renderMyPosts(posts) {
+  const list = document.querySelector('#my-posts-list');
+  const status = document.querySelector('.my-posts-status');
+  if (!list || !status) return;
+  status.textContent = posts.length ? '' : '작성한 게시글이 없습니다.';
+  list.innerHTML = posts.map(post => `<article class="my-post-item" data-post-id="${escapeHtml(post.id)}"><div><p>${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.summary)}</p></div><div class="my-post-actions"><a href="post-detail.html?id=${encodeURIComponent(post.id)}">보기</a><a href="write.html?id=${encodeURIComponent(post.id)}">수정</a><button class="delete-post" type="button">삭제</button></div></article>`).join('');
+}
+
+async function loadMyPosts() {
+  const list = document.querySelector('#my-posts-list');
+  if (!list) return;
+  const status = document.querySelector('.my-posts-status');
+  if (!currentSession) { status.innerHTML = '내 게시글을 관리하려면 <a href="login.html">로그인</a>해 주세요.'; return; }
+  try {
+    const result = await authRequest({ action: 'myPosts', token: currentSession.token });
+    if (!result.success) throw new Error(result.message);
+    renderMyPosts(result.posts);
+  } catch (error) { status.textContent = error.message; }
+}
+
+document.querySelector('#my-posts-list')?.addEventListener('click', async event => {
+  const button = event.target.closest('.delete-post');
+  if (!button) return;
+  const item = button.closest('[data-post-id]');
+  if (!confirm('이 게시글을 삭제할까요? 삭제 후 복구할 수 없습니다.')) return;
+  button.disabled = true;
+  try {
+    const result = await authRequest({ action: 'deletePost', token: currentSession?.token, postId: item.dataset.postId });
+    if (!result.success) throw new Error(result.message);
+    item.remove();
+    if (!document.querySelector('.my-post-item')) document.querySelector('.my-posts-status').textContent = '작성한 게시글이 없습니다.';
+  } catch (error) { alert(error.message); button.disabled = false; }
+});
+
+loadPublicPosts();
+loadHomePosts();
+loadPostDetail();
+loadMyPosts();
+
 const writeForm = document.querySelector('[data-form="write"]');
 const draftButton = document.querySelector('#draft-button');
+const editingPostId = page === 'write.html' ? new URLSearchParams(location.search).get('id') : null;
 writeForm?.addEventListener('submit', async event => {
   event.preventDefault();
   const status = writeForm.querySelector('.form-status');
@@ -177,14 +286,16 @@ writeForm?.addEventListener('submit', async event => {
     if (!session?.token) throw new Error('로그인 후 게시글을 저장해 주세요.');
     const result = await authRequest({
       ...Object.fromEntries(new FormData(writeForm)),
-      action: 'createPost',
+      action: editingPostId ? 'updatePost' : 'createPost',
       token: session.token,
+      postId: editingPostId || undefined,
     });
     if (!result.success) throw new Error(result.message || '게시글을 저장하지 못했습니다.');
     status.textContent = result.message;
     document.querySelector('#save-state').textContent = '저장됨';
     localStorage.removeItem('blog-draft');
-    writeForm.reset();
+    if (editingPostId) setTimeout(() => { location.href = 'profile.html#my-posts-section'; }, 600);
+    else writeForm.reset();
   } catch (error) {
     status.textContent = error.message;
   } finally {
@@ -201,6 +312,20 @@ if (writeForm) {
   const draft = JSON.parse(localStorage.getItem('blog-draft') || 'null');
   if (draft) Object.entries(draft).forEach(([key,value]) => { if (writeForm.elements[key]) writeForm.elements[key].value = value; });
 }
+
+async function loadPostForEditing() {
+  if (!writeForm || !editingPostId) return;
+  if (!currentSession) { location.href = 'login.html'; return; }
+  document.querySelector('.editor-head h1').textContent = '게시글 수정';
+  writeForm.querySelector('[type="submit"]').textContent = '수정 완료';
+  try {
+    const result = await authRequest({ action: 'myPost', token: currentSession.token, postId: editingPostId });
+    if (!result.success) throw new Error(result.message);
+    ['category', 'title', 'summary', 'tags', 'content'].forEach(key => { writeForm.elements[key].value = result.post[key] || ''; });
+    document.querySelector('#save-state').textContent = '수정 중';
+  } catch (error) { writeForm.querySelector('.form-status').textContent = error.message; }
+}
+loadPostForEditing();
 
 document.querySelector('.subscribe-form')?.addEventListener('submit', event => { event.preventDefault(); event.target.querySelector('button').textContent = '구독 완료'; });
 const year = document.querySelector('#year'); if (year) year.textContent = new Date().getFullYear();

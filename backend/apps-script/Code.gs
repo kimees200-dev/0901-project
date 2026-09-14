@@ -26,13 +26,21 @@ function doGet(e) {
         success: true,
         message: 'API가 정상 작동 중입니다.',
         service: 'temperature-of-record-auth',
-        version: '1.2.0',
+        version: '1.3.0',
         setupComplete: PropertiesService.getScriptProperties().getProperty('SETUP_COMPLETE') === 'true',
       });
     }
 
     if (action === 'me') {
       return response(getCurrentUser_(e.parameter.token));
+    }
+
+    if (action === 'posts') {
+      return response({ success: true, posts: getPosts_() });
+    }
+
+    if (action === 'post') {
+      return response(getPost_(e.parameter.id));
     }
 
     return response({ success: false, message: '지원하지 않는 요청입니다.' });
@@ -55,6 +63,14 @@ function doPost(e) {
         return response(logout_(body.token));
       case 'createPost':
         return response(createPost_(body));
+      case 'myPosts':
+        return response(getMyPosts_(body.token));
+      case 'myPost':
+        return response(getMyPost_(body.token, body.postId));
+      case 'updatePost':
+        return response(updatePost_(body));
+      case 'deletePost':
+        return response(deletePost_(body));
       default:
         return response({ success: false, message: '지원하지 않는 요청입니다.' });
     }
@@ -77,11 +93,7 @@ function setupSheets() {
 function createPost_(body) {
   const auth = getCurrentUser_(body.token);
   if (!auth.success) return auth;
-  const fields = ['category', 'title', 'summary', 'tags', 'content'];
-  const values = fields.map(field => String(body[field] || '').trim());
-  if (!['개발', '일상', '회고'].includes(values[0])) throw new Error('카테고리를 확인해 주세요.');
-  if (!values[1] || !values[2] || !values[4]) throw new Error('제목, 요약, 본문을 입력해 주세요.');
-  if (values.some(value => value.length > 45000)) throw new Error('각 입력 항목은 45,000자 이하로 작성해 주세요.');
+  const values = postValues_(body);
   const sheet = getRequiredSheet_(CONFIG.POSTS_SHEET);
   const id = Utilities.getUuid();
   const lock = LockService.getScriptLock();
@@ -94,6 +106,90 @@ function createPost_(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function getPosts_() {
+  const posts = getRowsAsObjects_(getRequiredSheet_(CONFIG.POSTS_SHEET));
+  const users = getRowsAsObjects_(getRequiredSheet_(CONFIG.USERS_SHEET));
+  const userNames = Object.fromEntries(users.map(user => [String(user.id), String(user.name)]));
+  return posts.map(post => publicPost_(post, userNames[String(post.userId)] || '작성자'))
+    .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+}
+
+function getPost_(id) {
+  const post = getPosts_().find(item => String(item.id) === String(id || ''));
+  return post ? { success: true, post } : { success: false, message: '게시글을 찾을 수 없습니다.' };
+}
+
+function getMyPosts_(token) {
+  const auth = getCurrentUser_(token);
+  if (!auth.success) return auth;
+  const posts = getRowsAsObjects_(getRequiredSheet_(CONFIG.POSTS_SHEET))
+    .filter(post => String(post.userId) === String(auth.user.id))
+    .map(post => publicPost_(post, auth.user.name))
+    .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  return { success: true, posts };
+}
+
+function getMyPost_(token, postId) {
+  const result = getMyPosts_(token);
+  if (!result.success) return result;
+  const post = result.posts.find(item => String(item.id) === String(postId || ''));
+  return post ? { success: true, post } : { success: false, message: '수정할 게시글을 찾을 수 없습니다.' };
+}
+
+function updatePost_(body) {
+  const auth = getCurrentUser_(body.token);
+  if (!auth.success) return auth;
+  const sheet = getRequiredSheet_(CONFIG.POSTS_SHEET);
+  const rows = sheet.getDataRange().getValues();
+  const rowIndex = findOwnedPostRow_(rows, body.postId, auth.user.id);
+  if (rowIndex < 1) return { success: false, message: '수정 권한이 없거나 게시글을 찾을 수 없습니다.' };
+  const values = postValues_(body).map(safeSheetValue_);
+  sheet.getRange(rowIndex + 1, 3, 1, values.length).setValues([values]);
+  SpreadsheetApp.flush();
+  return { success: true, message: '게시글이 수정되었습니다.', postId: String(body.postId) };
+}
+
+function deletePost_(body) {
+  const auth = getCurrentUser_(body.token);
+  if (!auth.success) return auth;
+  const sheet = getRequiredSheet_(CONFIG.POSTS_SHEET);
+  const rows = sheet.getDataRange().getValues();
+  const rowIndex = findOwnedPostRow_(rows, body.postId, auth.user.id);
+  if (rowIndex < 1) return { success: false, message: '삭제 권한이 없거나 게시글을 찾을 수 없습니다.' };
+  sheet.deleteRow(rowIndex + 1);
+  return { success: true, message: '게시글이 삭제되었습니다.' };
+}
+
+function postValues_(body) {
+  const fields = ['category', 'title', 'summary', 'tags', 'content'];
+  const values = fields.map(field => String(body[field] || '').trim());
+  if (!['개발', '일상', '회고'].includes(values[0])) throw new Error('카테고리를 확인해 주세요.');
+  if (!values[1] || !values[2] || !values[4]) throw new Error('제목, 요약, 본문을 입력해 주세요.');
+  if (values.some(value => value.length > 45000)) throw new Error('각 입력 항목은 45,000자 이하로 작성해 주세요.');
+  return values;
+}
+
+function findOwnedPostRow_(rows, postId, userId) {
+  return rows.findIndex((row, index) => index > 0 && String(row[0]) === String(postId || '') && String(row[1]) === String(userId));
+}
+
+function safeSheetValue_(value) {
+  return /^[=+@-]/.test(value) ? "'" + value : value;
+}
+
+function publicPost_(post, author) {
+  return {
+    id: String(post.id),
+    category: String(post.category),
+    title: String(post.title),
+    summary: String(post.summary),
+    tags: String(post.tags || ''),
+    content: String(post.content),
+    author: String(author),
+    createdAt: post.createdAt,
+  };
 }
 
 function signup_(body) {
@@ -340,3 +436,22 @@ function publicUser_(user) {
     createdAt: user.createdAt,
   };
 }
+function debugDatabase() {
+    const spreadsheet = getSpreadsheet_();
+
+    console.log({
+      id: spreadsheet.getId(),
+      name: spreadsheet.getName(),
+      url: spreadsheet.getUrl(),
+      usersExists: Boolean(
+        spreadsheet.getSheetByName('users')
+      ),
+      sessionsExists: Boolean(
+        spreadsheet.getSheetByName('sessions')
+      ),
+      postsExists: Boolean(
+        spreadsheet.getSheetByName('posts')
+      )
+    });
+  }
+
