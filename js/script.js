@@ -294,8 +294,12 @@ writeForm?.addEventListener('submit', async event => {
     status.textContent = result.message;
     document.querySelector('#save-state').textContent = '저장됨';
     localStorage.removeItem('blog-draft');
-    if (editingPostId) setTimeout(() => { location.href = 'profile.html#my-posts-section'; }, 600);
-    else writeForm.reset();
+    if (editingPostId) {
+      setTimeout(() => { location.href = 'profile.html#my-posts-section'; }, 600);
+    } else {
+      document.querySelector('#save-state').textContent = '게시됨';
+      setTimeout(() => { location.href = `post-detail.html?id=${encodeURIComponent(result.postId)}`; }, 600);
+    }
   } catch (error) {
     status.textContent = error.message;
   } finally {
