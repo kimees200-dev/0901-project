@@ -1,8 +1,28 @@
 const root = document.documentElement;
 const page = location.pathname.split('/').pop() || 'index.html';
 
+function getStoredSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem('blog-session') || 'null');
+    if (!session?.token || !session?.user) return null;
+    if (session.expiresAt && new Date(session.expiresAt).getTime() <= Date.now()) {
+      localStorage.removeItem('blog-session');
+      return null;
+    }
+    return session;
+  } catch (error) {
+    localStorage.removeItem('blog-session');
+    return null;
+  }
+}
+
+const currentSession = getStoredSession();
+const authNavigation = currentSession
+  ? `<li><button class="nav-logout" type="button">로그아웃</button></li><li><a class="nav-cta" href="profile.html">프로필</a></li>`
+  : `<li><a href="login.html">로그인</a></li><li><a class="nav-cta" href="signup.html">회원가입</a></li>`;
+
 const headerHost = document.querySelector('[data-header]');
-if (headerHost) headerHost.outerHTML = `<header class="blog-header"><nav class="blog-nav container" aria-label="주요 메뉴"><a class="blog-logo" href="index.html">기록의 온도<span>.</span></a><button class="theme-toggle" type="button" aria-label="다크 모드로 변경">☾</button><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-list"><span class="sr-only">메뉴 열기</span><span></span><span></span><span></span></button><ul class="blog-nav-list" id="nav-list"><li><a href="posts.html">글 목록</a></li><li><a href="profile.html">프로필</a></li><li><a href="write.html">글쓰기</a></li><li><a href="login.html">로그인</a></li><li><a class="nav-cta" href="signup.html">회원가입</a></li></ul></nav></header>`;
+if (headerHost) headerHost.outerHTML = `<header class="blog-header"><nav class="blog-nav container" aria-label="주요 메뉴"><a class="blog-logo" href="index.html">기록의 온도<span>.</span></a><button class="theme-toggle" type="button" aria-label="다크 모드로 변경">☾</button><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-list"><span class="sr-only">메뉴 열기</span><span></span><span></span><span></span></button><ul class="blog-nav-list" id="nav-list"><li><a href="posts.html">글 목록</a></li><li><a href="write.html">글쓰기</a></li>${authNavigation}</ul></nav></header>`;
 
 const footerHost = document.querySelector('[data-footer]');
 if (footerHost) footerHost.outerHTML = `<footer class="blog-footer"><div class="container footer-inner"><p>© <span id="year"></span> 기록의 온도.</p><div><a href="profile.html">소개</a><a href="https://github.com/kimees200-dev" target="_blank" rel="noreferrer">GitHub</a></div></div></footer>`;
@@ -40,7 +60,7 @@ const validators = {
   password: value => value.length >= 8
 };
 
-const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbxIt134TfuoSSzAG4_HNLYw_Okm4Thkjv5i0yz1opc9zr6A8dpjitafBTV2xFQLlWlZ/exec';
+const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbzL7WU4VcaNtNqLryqFfaePU0hvIM1vGscRgi1ItZWuONfaBB4fDnrMyuGlg9f-2je_/exec';
 
 async function authRequest(payload) {
   const response = await fetch(AUTH_API_URL, {
@@ -61,6 +81,20 @@ async function authRequest(payload) {
     throw new Error('서버가 올바른 JSON을 반환하지 않았습니다. Apps Script 배포 버전을 확인해 주세요.');
   }
 }
+
+document.querySelector('.nav-logout')?.addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = '로그아웃 중…';
+  try {
+    await authRequest({ action: 'logout', token: currentSession?.token });
+  } catch (error) {
+    console.warn('서버 로그아웃 요청에 실패해 로컬 세션만 정리합니다.', error);
+  } finally {
+    localStorage.removeItem('blog-session');
+    location.href = 'index.html';
+  }
+});
 
 document.querySelectorAll('.app-form').forEach(form => {
   form.addEventListener('submit', async event => {
@@ -131,6 +165,33 @@ search?.addEventListener('input', filterPosts);
 
 const writeForm = document.querySelector('[data-form="write"]');
 const draftButton = document.querySelector('#draft-button');
+writeForm?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const status = writeForm.querySelector('.form-status');
+  const button = writeForm.querySelector('[type="submit"]');
+  if (button.disabled) return;
+  button.disabled = true;
+  button.textContent = '저장 중…';
+  try {
+    const session = JSON.parse(localStorage.getItem('blog-session') || 'null');
+    if (!session?.token) throw new Error('로그인 후 게시글을 저장해 주세요.');
+    const result = await authRequest({
+      ...Object.fromEntries(new FormData(writeForm)),
+      action: 'createPost',
+      token: session.token,
+    });
+    if (!result.success) throw new Error(result.message || '게시글을 저장하지 못했습니다.');
+    status.textContent = result.message;
+    document.querySelector('#save-state').textContent = '저장됨';
+    localStorage.removeItem('blog-draft');
+    writeForm.reset();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = '게시하기';
+  }
+});
 draftButton?.addEventListener('click', () => {
   const draft = Object.fromEntries(new FormData(writeForm));
   localStorage.setItem('blog-draft', JSON.stringify(draft));

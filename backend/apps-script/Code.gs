@@ -6,6 +6,7 @@
 const CONFIG = Object.freeze({
   USERS_SHEET: 'users',
   SESSIONS_SHEET: 'sessions',
+  POSTS_SHEET: 'posts',
   SESSION_HOURS: 24,
   MIN_PASSWORD_LENGTH: 8,
 });
@@ -13,6 +14,7 @@ const CONFIG = Object.freeze({
 const SHEET_HEADERS = Object.freeze({
   users: ['id', 'name', 'email', 'passwordHash', 'salt', 'role', 'createdAt', 'updatedAt'],
   sessions: ['token', 'userId', 'expiresAt', 'createdAt'],
+  posts: ['id', 'userId', 'category', 'title', 'summary', 'tags', 'content', 'createdAt'],
 });
 
 function doGet(e) {
@@ -24,7 +26,7 @@ function doGet(e) {
         success: true,
         message: 'API가 정상 작동 중입니다.',
         service: 'temperature-of-record-auth',
-        version: '1.1.0',
+        version: '1.2.0',
         setupComplete: PropertiesService.getScriptProperties().getProperty('SETUP_COMPLETE') === 'true',
       });
     }
@@ -51,6 +53,8 @@ function doPost(e) {
         return response(login_(body));
       case 'logout':
         return response(logout_(body.token));
+      case 'createPost':
+        return response(createPost_(body));
       default:
         return response({ success: false, message: '지원하지 않는 요청입니다.' });
     }
@@ -64,9 +68,32 @@ function setupSheets() {
   const spreadsheet = getSpreadsheet_();
   ensureSheet_(spreadsheet, CONFIG.USERS_SHEET, SHEET_HEADERS.users);
   ensureSheet_(spreadsheet, CONFIG.SESSIONS_SHEET, SHEET_HEADERS.sessions);
+  ensureSheet_(spreadsheet, CONFIG.POSTS_SHEET, SHEET_HEADERS.posts);
 
   PropertiesService.getScriptProperties().setProperty('SETUP_COMPLETE', 'true');
   return '시트 초기화가 완료되었습니다.';
+}
+
+function createPost_(body) {
+  const auth = getCurrentUser_(body.token);
+  if (!auth.success) return auth;
+  const fields = ['category', 'title', 'summary', 'tags', 'content'];
+  const values = fields.map(field => String(body[field] || '').trim());
+  if (!['개발', '일상', '회고'].includes(values[0])) throw new Error('카테고리를 확인해 주세요.');
+  if (!values[1] || !values[2] || !values[4]) throw new Error('제목, 요약, 본문을 입력해 주세요.');
+  if (values.some(value => value.length > 45000)) throw new Error('각 입력 항목은 45,000자 이하로 작성해 주세요.');
+  const sheet = getRequiredSheet_(CONFIG.POSTS_SHEET);
+  const id = Utilities.getUuid();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    // 사용자 입력이 스프레드시트 수식으로 실행되지 않도록 저장합니다.
+    sheet.appendRow([id, auth.user.id, ...values.map(value => /^[=+@-]/.test(value) ? "'" + value : value), new Date().toISOString()]);
+    SpreadsheetApp.flush();
+    return { success: true, message: '게시글이 저장되었습니다.', postId: id };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function signup_(body) {
@@ -205,7 +232,7 @@ function getRequiredSheet_(name) {
   const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(name);
 
-  if (!sheet) {
+  if (!sheet || sheet.getLastRow() === 0) {
     const headers = SHEET_HEADERS[name];
     if (!headers) throw new Error(`지원하지 않는 시트입니다: ${name}`);
 
