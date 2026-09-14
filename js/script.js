@@ -236,6 +236,8 @@ function renderMyPosts(posts) {
   const list = document.querySelector('#my-posts-list');
   const status = document.querySelector('.my-posts-status');
   if (!list || !status) return;
+  const count = document.querySelector('.my-post-count');
+  if (count) count.textContent = `${posts.length}개`;
   status.textContent = posts.length ? '' : '작성한 게시글이 없습니다.';
   list.innerHTML = posts.map(post => `<article class="my-post-item" data-post-id="${escapeHtml(post.id)}"><div><p>${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.summary)}</p></div><div class="my-post-actions"><a href="post-detail.html?id=${encodeURIComponent(post.id)}">보기</a><a href="write.html?id=${encodeURIComponent(post.id)}">수정</a><button class="delete-post" type="button">삭제</button></div></article>`).join('');
 }
@@ -244,7 +246,7 @@ async function loadMyPosts() {
   const list = document.querySelector('#my-posts-list');
   if (!list) return;
   const status = document.querySelector('.my-posts-status');
-  if (!currentSession) { status.innerHTML = '내 게시글을 관리하려면 <a href="login.html">로그인</a>해 주세요.'; return; }
+  if (!currentSession) { status.innerHTML = '내 게시글을 관리하려면 <a class="button primary" href="login.html">로그인</a>해 주세요.'; return; }
   try {
     const result = await authRequest({ action: 'myPosts', token: currentSession.token });
     if (!result.success) throw new Error(result.message);
