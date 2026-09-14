@@ -19,6 +19,8 @@ Apps Script의 `프로젝트 설정 → 스크립트 속성`에서 다음 값을
 
 `PASSWORD_PEPPER`는 GitHub나 프론트엔드 코드에 절대 추가하지 않습니다.
 
+현재 `Code.gs`의 `CONFIG.SPREADSHEET_ID`는 `1RvuvTyVrH7ybteF0wxPS07UkMPb6Il6qCrhcpOWwF5w`로 고정되어 있습니다. 다른 문서를 사용할 때는 이 값을 변경해야 하며, `health` 응답의 `spreadsheetId`로 실제 연결 대상을 확인할 수 있습니다.
+
 ## 3. 시트 초기화
 
 Apps Script 편집기 상단의 함수 목록에서 `setupSheets`를 선택해 한 번 실행합니다. Google 계정 권한 요청을 승인하면 다음 시트가 생성됩니다.

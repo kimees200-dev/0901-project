@@ -21,7 +21,7 @@ function backend() {
     },
   };
   const context = vm.createContext({
-    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, flush() {} },
+    SpreadsheetApp: { openById: () => spreadsheet, getActiveSpreadsheet: () => spreadsheet, flush() {} },
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => null, setProperty() {} }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: { getUuid: () => 'post-id' },

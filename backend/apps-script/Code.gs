@@ -4,6 +4,7 @@
  */
 
 const CONFIG = Object.freeze({
+  SPREADSHEET_ID: '1RvuvTyVrH7ybteF0wxPS07UkMPb6Il6qCrhcpOWwF5w',
   USERS_SHEET: 'users',
   SESSIONS_SHEET: 'sessions',
   POSTS_SHEET: 'posts',
@@ -26,7 +27,8 @@ function doGet(e) {
         success: true,
         message: 'API가 정상 작동 중입니다.',
         service: 'temperature-of-record-auth',
-        version: '1.3.0',
+        version: '1.3.1',
+        spreadsheetId: getSpreadsheet_().getId(),
         setupComplete: PropertiesService.getScriptProperties().getProperty('SETUP_COMPLETE') === 'true',
       });
     }
@@ -316,12 +318,7 @@ function validateSignup_(name, email, password) {
 }
 
 function getSpreadsheet_() {
-  const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-  if (id) return SpreadsheetApp.openById(id);
-
-  const active = SpreadsheetApp.getActiveSpreadsheet();
-  if (!active) throw new Error('스크립트 속성에 SPREADSHEET_ID를 설정해 주세요.');
-  return active;
+  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
 }
 
 function getRequiredSheet_(name) {
@@ -454,4 +451,3 @@ function debugDatabase() {
       )
     });
   }
-
