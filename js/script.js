@@ -61,9 +61,34 @@ const validators = {
 };
 
 const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbzmIvvpME5ywQhvAvEQU5aTGRcifTAtC6lBLRxH1gHYZorX0Gkuw-IUdAbsOyYZFhit/exec';
+const REQUEST_TIMEOUT_MS = 12000;
+const POSTS_CACHE_KEY = 'blog-posts-cache-v1';
+const POSTS_CACHE_MAX_AGE = 5 * 60 * 1000;
+
+function readCache(key, maxAge = Infinity) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(key) || 'null');
+    if (!cached || Date.now() - cached.savedAt > maxAge) return null;
+    return cached.data;
+  } catch (error) { return null; }
+}
+
+function writeCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); } catch (error) { /* 저장 공간 부족 시 캐시 생략 */ }
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try { return await fetch(url, { ...options, signal: controller.signal }); }
+  catch (error) {
+    if (error.name === 'AbortError') throw new Error('서버 응답이 늦습니다. 잠시 후 다시 시도해 주세요.');
+    throw error;
+  } finally { clearTimeout(timer); }
+}
 
 async function authRequest(payload) {
-  const response = await fetch(AUTH_API_URL, {
+  const response = await fetchWithTimeout(AUTH_API_URL, {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -84,7 +109,7 @@ async function authRequest(payload) {
 
 async function apiGet(action, parameters = {}) {
   const query = new URLSearchParams({ action, ...parameters });
-  const response = await fetch(`${AUTH_API_URL}?${query}`, { redirect: 'follow' });
+  const response = await fetchWithTimeout(`${AUTH_API_URL}?${query}`, { redirect: 'follow' });
   const text = await response.text();
   if (!response.ok || text.trim().startsWith('<!DOCTYPE')) throw new Error('게시글 서버에 연결할 수 없습니다.');
   try { return JSON.parse(text); } catch (error) { throw new Error('서버 응답 형식이 올바르지 않습니다.'); }
@@ -155,6 +180,7 @@ document.querySelectorAll('.app-form').forEach(form => {
         setTimeout(() => { location.href = 'login.html'; }, 900);
       } else {
         localStorage.setItem('blog-session', JSON.stringify({ token: result.token, expiresAt: result.expiresAt, user: result.user }));
+        localStorage.setItem('blog-last-email', payload.email);
         status.textContent = result.message;
         setTimeout(() => { location.href = 'profile.html'; }, 500);
       }
@@ -185,14 +211,19 @@ search?.addEventListener('input', filterPosts);
 async function loadPublicPosts() {
   const list = document.querySelector('#post-list');
   if (!list) return;
+  const render = posts => {
+    list.innerHTML = posts.map(post => `<article data-category="${escapeHtml(post.category === '일상' ? 'life' : 'dev')}"><a href="post-detail.html?id=${encodeURIComponent(post.id)}"><div class="list-cover cover-purple">${escapeHtml(post.category)}</div><div><p class="post-meta">${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.summary)}</p></div></a></article>`).join('');
+    if (!posts.length) document.querySelector('.empty-state').hidden = false;
+    filterPosts();
+  };
+  const cached = readCache(POSTS_CACHE_KEY);
+  if (cached) render(cached);
   try {
     const result = await apiGet('posts');
     if (!result.success) throw new Error(result.message || '게시글을 불러오지 못했습니다.');
-    list.innerHTML = result.posts.map(post => `<article data-category="${escapeHtml(post.category === '일상' ? 'life' : 'dev')}"><a href="post-detail.html?id=${encodeURIComponent(post.id)}"><div class="list-cover cover-purple">${escapeHtml(post.category)}</div><div><p class="post-meta">${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.summary)}</p></div></a></article>`).join('');
-    if (!result.posts.length) document.querySelector('.empty-state').hidden = false;
-    filterPosts();
+    writeCache(POSTS_CACHE_KEY, result.posts); render(result.posts);
   } catch (error) {
-    list.innerHTML = `<p class="my-posts-status">${escapeHtml(error.message)}</p>`;
+    if (!cached) list.innerHTML = `<p class="my-posts-status">${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -200,14 +231,19 @@ async function loadHomePosts() {
   if (page !== 'index.html') return;
   const grid = document.querySelector('.post-grid');
   if (!grid) return;
+  const render = posts => {
+    const colors = ['cover-purple', 'cover-blue', 'cover-green'];
+    grid.innerHTML = posts.slice(0, 3).map((post, index) => `<article class="post-card"><a href="post-detail.html?id=${encodeURIComponent(post.id)}"><div class="post-cover ${colors[index % colors.length]}"><span>${escapeHtml(post.category)}</span></div><div class="post-content"><p class="post-meta">${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.summary)}</p><div class="post-author"><img src="assets/images/profile.jpeg" alt=""><span>${escapeHtml(post.author)}</span></div></div></a></article>`).join('');
+    if (!posts.length) grid.innerHTML = '<p class="my-posts-status">아직 작성된 게시글이 없습니다.</p>';
+  };
+  const cached = readCache(POSTS_CACHE_KEY);
+  if (cached) render(cached);
   try {
     const result = await apiGet('posts');
     if (!result.success) throw new Error(result.message || '최근 게시글을 불러오지 못했습니다.');
-    const colors = ['cover-purple', 'cover-blue', 'cover-green'];
-    grid.innerHTML = result.posts.slice(0, 3).map((post, index) => `<article class="post-card"><a href="post-detail.html?id=${encodeURIComponent(post.id)}"><div class="post-cover ${colors[index % colors.length]}"><span>${escapeHtml(post.category)}</span></div><div class="post-content"><p class="post-meta">${escapeHtml(post.category)} · ${escapeHtml(formatPostDate(post.createdAt))}</p><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.summary)}</p><div class="post-author"><img src="assets/images/profile.jpeg" alt=""><span>${escapeHtml(post.author)}</span></div></div></a></article>`).join('');
-    if (!result.posts.length) grid.innerHTML = '<p class="my-posts-status">아직 작성된 게시글이 없습니다.</p>';
+    writeCache(POSTS_CACHE_KEY, result.posts); render(result.posts);
   } catch (error) {
-    grid.innerHTML = `<p class="my-posts-status">${escapeHtml(error.message)}</p>`;
+    if (!cached) grid.innerHTML = `<p class="my-posts-status">${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -215,20 +251,24 @@ async function loadPostDetail() {
   if (page !== 'post-detail.html') return;
   const id = new URLSearchParams(location.search).get('id');
   if (!id) return;
-  try {
-    const result = await apiGet('post', { id });
-    if (!result.success) throw new Error(result.message);
-    const post = result.post;
+  const cachedPost = readCache(POSTS_CACHE_KEY)?.find(post => String(post.id) === String(id));
+  const render = post => {
+    document.title = `${post.title} | 기록의 온도`;
     document.querySelector('.article-header .blog-kicker').textContent = post.category;
     document.querySelector('.article-header h1').textContent = post.title;
     document.querySelector('.article-lead').textContent = post.summary;
     document.querySelector('.article-author b').textContent = post.author;
     document.querySelector('.article-author span').textContent = formatPostDate(post.createdAt);
-    const body = document.querySelector('.article-body');
-    body.innerHTML = '';
+    const body = document.querySelector('.article-body'); body.innerHTML = '';
     String(post.content).split(/\n{2,}/).forEach(paragraph => { const item = document.createElement('p'); item.textContent = paragraph; body.appendChild(item); });
+  };
+  if (cachedPost) render(cachedPost);
+  try {
+    const result = await apiGet('post', { id });
+    if (!result.success) throw new Error(result.message);
+    render(result.post);
   } catch (error) {
-    document.querySelector('.article-body').textContent = error.message;
+    if (!cachedPost) document.querySelector('.article-body').textContent = error.message;
   }
 }
 
@@ -264,6 +304,7 @@ document.querySelector('#my-posts-list')?.addEventListener('click', async event 
     const result = await authRequest({ action: 'deletePost', token: currentSession?.token, postId: item.dataset.postId });
     if (!result.success) throw new Error(result.message);
     item.remove();
+    localStorage.removeItem(POSTS_CACHE_KEY);
     if (!document.querySelector('.my-post-item')) document.querySelector('.my-posts-status').textContent = '작성한 게시글이 없습니다.';
   } catch (error) { alert(error.message); button.disabled = false; }
 });
@@ -276,6 +317,7 @@ loadMyPosts();
 const writeForm = document.querySelector('[data-form="write"]');
 const draftButton = document.querySelector('#draft-button');
 const editingPostId = page === 'write.html' ? new URLSearchParams(location.search).get('id') : null;
+const draftKey = `blog-draft-${editingPostId || 'new'}`;
 writeForm?.addEventListener('submit', async event => {
   event.preventDefault();
   const status = writeForm.querySelector('.form-status');
@@ -295,7 +337,8 @@ writeForm?.addEventListener('submit', async event => {
     if (!result.success) throw new Error(result.message || '게시글을 저장하지 못했습니다.');
     status.textContent = result.message;
     document.querySelector('#save-state').textContent = '저장됨';
-    localStorage.removeItem('blog-draft');
+    localStorage.removeItem(draftKey);
+    localStorage.removeItem(POSTS_CACHE_KEY);
     if (editingPostId) {
       setTimeout(() => { location.href = 'profile.html#my-posts-section'; }, 600);
     } else {
@@ -311,12 +354,21 @@ writeForm?.addEventListener('submit', async event => {
 });
 draftButton?.addEventListener('click', () => {
   const draft = Object.fromEntries(new FormData(writeForm));
-  localStorage.setItem('blog-draft', JSON.stringify(draft));
+  localStorage.setItem(draftKey, JSON.stringify(draft));
   document.querySelector('#save-state').textContent = '임시 저장됨';
 });
 if (writeForm) {
-  const draft = JSON.parse(localStorage.getItem('blog-draft') || 'null');
+  const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
   if (draft) Object.entries(draft).forEach(([key,value]) => { if (writeForm.elements[key]) writeForm.elements[key].value = value; });
+  let draftTimer;
+  writeForm.addEventListener('input', () => {
+    document.querySelector('#save-state').textContent = '작성 중…';
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      localStorage.setItem(draftKey, JSON.stringify(Object.fromEntries(new FormData(writeForm))));
+      document.querySelector('#save-state').textContent = '자동 임시 저장됨';
+    }, 500);
+  });
 }
 
 async function loadPostForEditing() {
@@ -332,6 +384,9 @@ async function loadPostForEditing() {
   } catch (error) { writeForm.querySelector('.form-status').textContent = error.message; }
 }
 loadPostForEditing();
+
+const loginEmail = document.querySelector('#login-email');
+if (loginEmail && !loginEmail.value) loginEmail.value = localStorage.getItem('blog-last-email') || '';
 
 document.querySelector('.subscribe-form')?.addEventListener('submit', event => { event.preventDefault(); event.target.querySelector('button').textContent = '구독 완료'; });
 const year = document.querySelector('#year'); if (year) year.textContent = new Date().getFullYear();
