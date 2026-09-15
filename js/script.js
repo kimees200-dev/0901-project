@@ -60,7 +60,7 @@ const validators = {
   password: value => value.length >= 8
 };
 
-const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbzmIvvpME5ywQhvAvEQU5aTGRcifTAtC6lBLRxH1gHYZorX0Gkuw-IUdAbsOyYZFhit/exec';
+const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbyYcok5nz53RTceShkPaUrf2kNFBuLwmN3c18E0yVD4QVGvqMgKEbXi79lNn3BIYwcJ/exec';
 const REQUEST_TIMEOUT_MS = 12000;
 const POSTS_CACHE_KEY = 'blog-posts-cache-v1';
 const POSTS_CACHE_MAX_AGE = 5 * 60 * 1000;
